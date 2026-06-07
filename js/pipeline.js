@@ -52,13 +52,33 @@ const Pipeline = (() => {
     const results = [];
 
     for (const file of files) {
-      const base64 = await readFileAsBase64(file);
-      results.push({
-        name:     file.name,
-        mimeType: file.type || guessMime(file.name),
-        data:     base64,
-        size:     file.size,
-      });
+      if (file.data || file.extractedText) {
+        // Already processed by app.js (FileReader/Mammoth)
+        results.push({
+          name:     file.name,
+          mimeType: file.mimeType || guessMime(file.name),
+          data:     file.data || null,
+          extractedText: file.extractedText || null,
+          size:     file.data ? Math.round((file.data.length * 3) / 4) : (file.extractedText?.length || 0),
+        });
+      } else if (file instanceof File || file instanceof Blob) {
+        // Raw File/Blob fallback
+        const base64 = await readFileAsBase64(file);
+        results.push({
+          name:     file.name,
+          mimeType: file.type || guessMime(file.name),
+          data:     base64,
+          size:     file.size,
+        });
+      } else {
+        // Fallback for uninitialized/unexpected objects
+        results.push({
+          name:     file.name || 'Unknown',
+          mimeType: file.mimeType || 'application/octet-stream',
+          data:     null,
+          size:     0,
+        });
+      }
     }
 
     setStepState('ingest', 'done');
@@ -158,12 +178,15 @@ const Pipeline = (() => {
     try {
       // Stage 1
       const fileData = await ingest(files);
+      await delay(150);
 
       // Stage 2
       const chunks = chunk(fileData);
+      await delay(150);
 
       // Stage 3
       const indexed = embed(chunks);
+      await delay(150);
 
       // Stage 4 (prompt construction happens in api.js using buildClauseContext)
       setStepState('prompt', 'active');
@@ -173,7 +196,7 @@ const Pipeline = (() => {
       return { fileData, chunks, indexed };
     } catch (err) {
       STEPS.forEach(s => {
-        const el = document.querySelector(`.pipeline-step[data-step="${s}"] .step-status`);
+        const el = document.querySelector(`.pipeline-step[data-step="${s}"]`);
         if (el && el.classList.contains('active')) {
           setStepState(s, 'error');
         }
