@@ -119,7 +119,7 @@ This website demonstrates:
 
 ### Why it stands out for judges
 - Combines AI, legal reasoning, and document processing in one browser app.
-- Uses a **minimal architecture** with a small frontend and secure backend.
+- Implements a **robust, production-ready architecture** with secure backend proxying, streaming AI integration, and clear frontend/backend separation.
 - Shows deliberate design: legal prompt engineering, structured output parsing, and live streaming.
 - The pipeline is both functional and visible, making technical decisions easy to evaluate.
 
