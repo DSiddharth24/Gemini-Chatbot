@@ -80,31 +80,48 @@ This website demonstrates:
 
 ---
 
-## How to Run It Locally
+## Detailed Tech Stack
 
-1. Install dependencies:
+### Frontend
+- Built with **pure HTML5, CSS3, and vanilla ES2020 JavaScript** — no frontend framework.
+- `index.html` defines the chat UI, file upload controls, status indicators, and pipeline progress bar.
+- `styles/main.css` provides responsive layout, light/dark theme switching, and polished messaging UI.
+- `app.js` manages UI state, history, message rendering, file handling, and the send/query flow.
+- `modes.js` defines 8 legal workflows and generates the mode-specific system instructions used for Gemini.
 
-```bash
-pip install -r requirements.txt
-```
+### AI Integration
+- `api.js` sends user messages and document attachments to Gemini through the Flask proxy.
+- Uses **streaming SSE** to render Gemini output token-by-token for a real-time chat experience.
+- Supports **multimodal inline_data** payloads for PDFs, images, audio, and plain text documents.
+- Includes a legal prompt strategy: low `temperature`, strong mode instructions, and a dynamic system prompt.
 
-2. Set your Gemini API key in `.env`:
+### Document Pipeline
+- `pipeline.js` implements a six-stage flow:
+  1. **Ingest** — read files and encode attachments
+  2. **Chunk** — simulate clause segmentation for legal documents
+  3. **Embed** — rank clause relevance for potential RAG-style summarization
+  4. **Prompt** — assemble instructions, history, and document context
+  5. **Gemini** — stream AI-generated answer
+  6. **Parse** — extract structured labels and format the response
+- The pipeline is shown visually in the UI, making the process transparent and judge-friendly.
 
-```bash
-GEMINI_API_KEY=YOUR_API_KEY_HERE
-```
+### Response Processing
+- `parser.js` converts Gemini text into safe, formatted HTML.
+- It extracts structured labels like `[HIGH]`, `[MED]`, `[LOW]`, `[MISSING]`, and `[SIGNIFICANT]`.
+- It renders risk heatmaps, clause coverage cards, Markdown, tables, and lists.
+- This turns raw AI text into a legal review dashboard instead of plain chat output.
 
-3. Start the server:
+### Backend Proxy
+- `server.py` is a **Python Flask** proxy that keeps the Gemini API key secure.
+- It forwards requests to Gemini’s `streamGenerateContent` endpoint with `alt=sse`.
+- The server enforces the model temperature from environment settings and handles request streaming.
+- No API key is exposed to the browser.
 
-```bash
-python server.py
-```
-
-4. Open the app in your browser:
-
-```bash
-http://localhost:5000
-```
+### Why it stands out for judges
+- Combines AI, legal reasoning, and document processing in one browser app.
+- Uses a **minimal architecture** with a small frontend and secure backend.
+- Shows deliberate design: legal prompt engineering, structured output parsing, and live streaming.
+- The pipeline is both functional and visible, making technical decisions easy to evaluate.
 
 ---
 
