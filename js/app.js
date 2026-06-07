@@ -105,26 +105,53 @@
       const ext = file.name.split('.').pop().toLowerCase();
 
       if (ext === 'docx' || ext === 'txt') {
-        // Extract text server-side, send as text part to Gemini
+        // Show a loading chip while extracting
+        const placeholder = { name: file.name, mimeType: 'text/plain', extractedText: null, loading: true };
+        state.files.push(placeholder);
+        renderChips();
+
         try {
           const formData = new FormData();
           formData.append('file', file);
-          const res  = await fetch('/api/extract', { method: 'POST', body: formData });
+
+          const res = await fetch('/api/extract', { method: 'POST', body: formData });
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
+            throw new Error(err.error || `Server error ${res.status}`);
+          }
+
           const data = await res.json();
           if (data.error) throw new Error(data.error);
-          // Store as extracted text type — handled specially in send()
-          state.files.push({ name: file.name, mimeType: 'text/plain', extractedText: data.text });
+          if (!data.text || data.text.trim().length === 0) throw new Error('Document appears to be empty or could not be read.');
+
+          // Update placeholder with real data
+          placeholder.extractedText = data.text;
+          placeholder.loading = false;
+          renderChips();
+
         } catch (err) {
-          alert(`Could not read ${file.name}: ${err.message}`);
+          // Remove the placeholder and show error in chat
+          state.files = state.files.filter(f => f !== placeholder);
+          renderChips();
+          showError(`Could not read "${file.name}": ${err.message}`);
         }
+
       } else {
-        // PDF / image / audio — encode as base64 for Gemini inline_data
+        // PDF / image / audio — base64 for Gemini inline_data
         const b64  = await toBase64(file);
         const mime = file.type || guessMime(file.name);
         state.files.push({ name: file.name, mimeType: mime, data: b64 });
+        renderChips();
       }
     }
-    renderChips();
+  }
+
+  function showError(msg) {
+    dom.emptyState.style.display = 'none';
+    const el = addMsg('ai', '', {});
+    el.querySelector('.msg-bubble').innerHTML =
+      `<p style="color:var(--danger)">⚠ ${esc(msg)}</p>`;
   }
 
   function toBase64(file) {
@@ -149,14 +176,18 @@
     state.files.forEach((f, i) => {
       const chip = document.createElement('div');
       chip.className = 'file-chip';
+      const icon = f.loading ? '⏳' : mimeIcon(f.mimeType);
+      const label = f.loading ? `Reading ${esc(f.name)}…` : esc(f.name);
       chip.innerHTML = `
-        <span>${mimeIcon(f.mimeType)}</span>
-        <span class="file-chip-name" title="${esc(f.name)}">${esc(f.name)}</span>
-        <button class="file-chip-rm" data-i="${i}" aria-label="Remove ${esc(f.name)}">✕</button>`;
-      chip.querySelector('.file-chip-rm').onclick = () => {
-        state.files.splice(i, 1);
-        renderChips();
-      };
+        <span>${icon}</span>
+        <span class="file-chip-name" title="${esc(f.name)}">${label}</span>
+        ${f.loading ? '' : `<button class="file-chip-rm" data-i="${i}" aria-label="Remove ${esc(f.name)}">✕</button>`}`;
+      if (!f.loading) {
+        chip.querySelector('.file-chip-rm').onclick = () => {
+          state.files.splice(i, 1);
+          renderChips();
+        };
+      }
       dom.attachedRow.appendChild(chip);
     });
   }
@@ -202,6 +233,12 @@
   // ── Send ───────────────────────────────────────────────────────────────────
   async function send(overrideText = null) {
     if (state.generating) return;
+
+    // Block if any file is still being extracted
+    if (state.files.some(f => f.loading)) {
+      showError('Please wait — document is still being read.');
+      return;
+    }
 
     const text  = (overrideText ?? dom.messageInput.value).trim();
     const files = [...state.files];
