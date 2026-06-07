@@ -22,7 +22,6 @@ The app supports:
 - **Summarisation**: generates a concise executive summary of any document
 - **General Legal Q&A**: answers legal questions with focused context and citations
 
-
 ---
 
 ## Live Demo
@@ -30,6 +29,41 @@ The app supports:
 Visit the deployed app here:
 
 https://gemini-chatbot-4mmq.onrender.com/
+
+---
+
+## Notable Features and Accessibility
+
+### Analysis Modes
+
+<img width="791" height="58" alt="Screenshot 2026-06-07 233950" src="https://github.com/user-attachments/assets/5c540b71-121f-4b13-a633-a8ed8389af83" />
+
+LegalEase offers 8 specialised analysis modes, each instructing Gemini 1.5 Pro differently to produce a specific type of legal output. Switch between modes with a single click at the top of the chat.
+💬 Q&A — Ask any legal question and get answers with citations to Indian statutes, IPC sections, and relevant case law.
+⚠ Risk — Scans every clause and returns a colour-coded heatmap of High, Medium, and Low risk findings extracted directly from Gemini's response.
+🔍 Missing — Checks your document against standard Indian contract templates and lists every clause that is absent, along with why it matters.
+⚖ Compare — Upload two versions of a document. Gemini diffs them and flags every addition, removal, and legally significant change.
+✨ Simplify — Rewrites dense legal language into plain English that anyone can understand, without losing any meaning.
+📖 IPC — Looks up exact Indian Penal Code, CrPC, and CPC sections with applicable penalties and landmark Supreme Court judgements.
+✍ Draft — Writes a new contract clause from scratch in formal Indian legal language, plus a plain-language alternate version.
+📋 Summarise — Produces a structured executive summary covering parties, obligations, payment terms, key risks, and jurisdiction.
+
+Each mode injects a different system instruction into Gemini at runtime — same model, entirely different prompt structure, output format, and parsing logic.
+
+### Audio Response
+Below the response, there is an option called read aloud, where the chatbot gives out an audio of the generated response.
+
+### Theme Toggle and Chat Delete
+
+<img width="120" height="57" alt="image" src="https://github.com/user-attachments/assets/ffe40b0d-fb0b-435c-873c-74c9af95edf9" />
+
+The left button is for theme toggle(dark and light) and the right button for deleting the whole converstaion.
+
+---
+
+## Documents for testing purposes
+[Synova_ServiceAgreement_FIXED.docx](https://github.com/user-attachments/files/28686149/Synova_ServiceAgreement_FIXED.docx)
+[Synova_ServiceAgreement_FLAWED.docx](https://github.com/user-attachments/files/28686151/Synova_ServiceAgreement_FLAWED.docx)
 
 ---
 
