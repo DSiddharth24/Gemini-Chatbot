@@ -9,7 +9,7 @@ https://gemini-chatbot-4mmq.onrender.com/
 ## What This Chatbot Does
 
 This Chatbot is a legal chatbot built to analyse and interpret Indian legal documents using Gemini AI.
-It lets a judge or reviewer quickly interact with contracts, agreements, and legal text through a browser interface.
+It lets an everyday citizen, judge or reviewer quickly interact with contracts, agreements, and legal text through a browser interface.
 
 The app supports:
 
