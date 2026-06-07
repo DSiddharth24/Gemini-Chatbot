@@ -288,10 +288,7 @@
     setStatus('processing', 'Analysing…');
     setGenerating(true);
 
-    Pipeline.setStepState('prompt', 'active');
     const clauseCtx = Pipeline.buildClauseContext();
-    await tick(80);
-    Pipeline.setStepState('prompt', 'done');
     Pipeline.setGeminiActive();
 
     const aiEl     = addMsg('ai', '', { streaming: true });

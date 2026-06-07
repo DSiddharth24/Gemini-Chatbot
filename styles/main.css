@@ -453,6 +453,32 @@ input:focus, textarea:focus { border-color: var(--accent); }
   font-style: italic;
 }
 .msg-bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+.msg-bubble table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.msg-bubble th,
+.msg-bubble td {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.msg-bubble th {
+  background: var(--bg);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.msg-bubble tbody tr:hover {
+  background: var(--bg);
+}
 
 /* ─────────────────────────────────────────────
    RISK HEATMAP

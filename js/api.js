@@ -146,8 +146,8 @@ const GeminiAPI = (() => {
               onChunk?.(delta, fullText);
             }
           } catch (e) {
-            // Re-throw real errors, ignore malformed SSE chunks
-            if (e.message && !e.message.startsWith('JSON')) {
+            // Ignore JSON syntax errors in streaming chunks (e.g. malformed or partial frames), re-throw real errors
+            if (!(e instanceof SyntaxError)) {
               throw e;
             }
           }
