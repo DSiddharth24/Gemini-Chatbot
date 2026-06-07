@@ -186,24 +186,7 @@ input:focus, textarea:focus { border-color: var(--accent); }
   border-color: var(--accent);
 }
 
-/* Language toggle */
-.lang-toggle {
-  display: flex;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  padding: 2px;
-  gap: 1px;
-}
-.lang-btn {
-  padding: 3px 9px;
-  border-radius: var(--radius-pill);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-2);
-  transition: all var(--ease);
-}
-.lang-btn.active { background: var(--accent); color: var(--accent-text); }
+/* lang-toggle removed */
 
 /* Header icon buttons */
 .hdr-btn {
@@ -684,7 +667,6 @@ input:focus, textarea:focus { border-color: var(--accent); }
 ───────────────────────────────────────────── */
 @media (max-width: 700px) {
   .header-center { display: none; }
-  .lang-toggle { display: none; }
   .msg-body { max-width: 90%; }
   .empty-title { font-size: 26px; }
   .messages { padding: 16px 12px 8px; }

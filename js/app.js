@@ -24,7 +24,6 @@
   const dom = {
     // Header
     modeBar:       $('modeBar'),
-    langBtns:      document.querySelectorAll('.lang-btn'),
     themeBtn:      $('themeBtn'),
     themeIcon:     $('themeIcon'),
     clearBtn:      $('clearBtn'),
@@ -53,7 +52,6 @@
     state.session = Storage.createNewSession();
     applyTheme('light');
     setModeUI('general');
-    setLangUI('en');
     bind();
     dom.messageInput.focus();
   }
@@ -82,15 +80,8 @@
     setModeUI(mode);
   }
 
-  // ── Language ───────────────────────────────────────────────────────────────
-  function setLangUI(lang) {
-    dom.langBtns.forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
-  }
-
-  function setLang(lang) {
-    state.lang = lang;
-    setLangUI(lang);
-  }
+  // ── Language (fixed to English) ───────────────────────────────────────────
+  // Language toggle removed — English only
 
   // ── Clear session ──────────────────────────────────────────────────────────
   function clearSession() {
@@ -438,9 +429,6 @@
       const b = e.target.closest('.mode-btn');
       if (b) setMode(b.dataset.mode);
     });
-
-    // Language
-    dom.langBtns.forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
 
     // Files
     dom.attachBtn.addEventListener('click', () => dom.fileInput.click());
