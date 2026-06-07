@@ -1,165 +1,127 @@
-# ⚖️ LegalEase
+# Gemini Chatbot
 
-**AI-powered Indian legal document intelligence platform**  
-Built for GDGoC × PES College of Engineering, Mandya — Build Your Own Chatbot (BYOC)
+https://gemini-chatbot-4mmq.onrender.com/
+
+**AI-powered Indian legal document chatbot**
 
 ---
 
-## What It Does
+## What This Website Does
 
-LegalEase lets you upload any Indian legal document (PDF, image, audio) and instantly get:
+This website is a legal chatbot built to analyse and interpret Indian legal documents using Gemini AI.
+It lets a judge or reviewer quickly interact with contracts, agreements, and legal text through a browser interface.
 
-- **Risk Analysis** — clause-level `[HIGH]` / `[MED]` / `[LOW]` risk scoring with visual heatmap
-- **Missing Clause Detection** — checks against standard Indian contract templates
-- **Document Comparison** — diffs two versions, flags `[SIGNIFICANT]` changes
-- **Plain Language Simplification** — rewrites dense legal language for everyday citizens
-- **IPC / Bare Acts Reference** — precise statute citations, section text, and landmark cases
-- **Clause Drafting** — generates formal + plain-language versions of any contract clause
-- **Executive Summary** — structured 6-point summary of any document
-- **General Legal Q&A** — answer any Indian law question with statute citations
+The app supports:
 
-Multilingual output in **English**, **ಕನ್ನಡ (Kannada)**, and **हिंदी (Hindi)** — native Gemini generation, no translation API.
+- **Risk Analysis**: identifies risky clauses and labels them as `[HIGH]`, `[MED]`, or `[LOW]`
+- **Missing Clause Detection**: checks documents against standard Indian contract clauses
+- **Document Comparison**: compares two versions and highlights `[SIGNIFICANT]` differences
+- **Simplification**: rewrites legal text in plain language for non-lawyers
+- **IPC / Bare Acts Reference**: answers Indian law questions with statute citations
+- **Clause Drafting**: drafts formal and plain-language contract clauses
+- **Summarisation**: generates a concise executive summary of any document
+- **General Legal Q&A**: answers legal questions with focused context and citations
+
+It also supports multilingual output in **English**, **ಕನ್ನಡ (Kannada)**, and **हिंदी (Hindi)**.
+
+---
+
+## Live Demo
+
+Visit the deployed app here:
+
+https://gemini-chatbot-4mmq.onrender.com/
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | Vanilla HTML5 / CSS3 / ES2020 JavaScript |
-| AI Model | Gemini 1.5 Pro (multimodal, streaming, 1M token context) |
-| API | Google Generative Language REST API v1beta (SSE streaming) |
-| Storage | localStorage (sessions, API key, theme) |
-| TTS | Web Speech API (en-IN / hi-IN / kn-IN) |
-| Fonts | Inter, DM Serif Display, DM Mono (Google Fonts) |
+This project is built with a lightweight, modern stack focused on browser-based AI interaction.
+
+- **Frontend**: Vanilla HTML5, CSS3, and modern JavaScript
+- **Backend**: Python Flask server proxy
+- **AI**: Google Gemini via Generative Language API (streaming SSE)
+- **Document handling**: browser `FileReader`, base64 encoding, and inline multimodal data
+- **State**: in-memory session state for history and file attachments
+- **Styling**: responsive UI with light/dark theme support
 
 ---
 
-## Project Structure
+## Code Overview
 
 ```
-LegalEase/
-├── index.html          # App shell — layout, sidebar, chat, input
-├── styles/
-│   └── main.css        # Full design system — light/dark themes, responsive
+Gemini-Chatbot-2/
+├── index.html          # Main web app shell and UI layout
+├── server.py           # Flask proxy server for Gemini API requests
+├── requirements.txt    # Python dependencies
+├── README.md           # Project documentation
 ├── js/
-│   ├── storage.js      # localStorage: API key, sessions, preferences
-│   ├── modes.js        # 8 analysis modes + system instruction builder
-│   ├── pipeline.js     # 6-stage processing pipeline + clause indexing
-│   ├── parser.js       # Markdown renderer + structured token extraction
-│   ├── api.js          # Gemini 1.5 Pro streaming API client
-│   └── app.js          # Main controller — wires all modules together
-└── README.md
+│   ├── api.js         # Gemini streaming client and request builder
+│   ├── app.js         # UI controller, chat flow, and state management
+│   ├── modes.js       # Mode definitions and system instruction builder
+│   ├── parser.js      # Response parsing, markdown rendering, and UI formatting
+│   ├── pipeline.js    # Document processing pipeline and clause indexing
+│   └── storage.js     # Local storage utility for settings and history
+└── styles/
+    └── main.css      # App styling, responsiveness, and dark mode
 ```
 
 ---
 
-## Setup & Deployment
+## Why This Is Worth Judging
 
-### 1. Create your `.env`
+This website demonstrates:
 
-```bash
-cp .env.example .env
-```
+- a full end-to-end AI assistant for legal document review
+- real-time streaming responses from Gemini
+- a custom mode system for different legal workflows
+- support for document uploads, audio input, and multilingual output
+- clean separation between frontend UI and backend API proxy
 
-Edit `.env` and set your key:
-```
-GEMINI_API_KEY=AIzaSy_your_actual_key
-```
+---
 
-The key stays on the server — it is never sent to the browser.
+## How to Run It Locally
 
-### 2. Install dependencies
+1. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run locally
+2. Set your Gemini API key in `.env`:
+
+```bash
+GEMINI_API_KEY=YOUR_API_KEY_HERE
+```
+
+3. Start the server:
 
 ```bash
 python server.py
-# open http://localhost:5000
 ```
 
-### 4. Deploy
+4. Open the app in your browser:
 
-**Render / Railway / Fly.io:** set `GEMINI_API_KEY` as an environment variable in the dashboard, push the repo, and point the start command to `python server.py`.
-
-**Heroku:**
 ```bash
-heroku config:set GEMINI_API_KEY=AIzaSy_your_key
-git push heroku main
+http://localhost:5000
 ```
 
 ---
 
-## Gemini Features Used
+## Deployment Notes
 
-| Feature | Implementation |
-|---|---|
-| **Streaming (SSE)** | `streamGenerateContent?alt=sse` — token-by-token rendering |
-| **Multimodal Input** | PDF + image + audio sent as `inline_data` parts in one API call |
-| **Long Context (1M tokens)** | Full conversation history sent on every call — no truncation |
-| **System Instructions** | Dynamic `system_instruction` block with mode + language + clause context |
-| **Structured Output** | Prompt-engineered `[HIGH]/[MED]/[LOW]/[MISSING]/[SIGNIFICANT]` token extraction |
-| **Multi-turn Memory** | Full `conversationHistory` array maintained across all turns |
-| **Multilingual Output** | Native Kannada/Hindi generation via language instruction in system prompt |
-| **Audio Input** | Voice recordings sent as `audio/wav` inline_data — no external STT needed |
+The app is designed for simple deployment on platforms like Render, Railway, or Fly.io.
+The Flask backend proxies Gemini requests so the API key remains secure on the server.
 
 ---
 
-## The 6-Stage Pipeline
+## Highlights
 
-Every query passes through this pipeline, visualised live in the sidebar:
-
-```
-INGEST → CHUNK → EMBED → PROMPT → GEMINI → PARSE
-```
-
-1. **Ingest** — `FileReader` reads files, encodes to base64
-2. **Chunk** — segments document into standard Indian contract clause units
-3. **Embed** — RAG layer: clause index ranked by semantic relevance (production: `text-embedding-004` + Chroma/Pinecone)
-4. **Prompt** — assembles system instruction + history + clause context + user message
-5. **Gemini** — streams response from Gemini 1.5 Pro via SSE
-6. **Parse** — extracts structured tokens, renders risk heatmaps and clause grids
+- **Multimodal support**: file upload, document text, and audio attachments
+- **Legal-first prompts**: Indian law focus with mode-specific system instructions
+- **Structured parsing**: extracts risk labels and renders them in the UI
+- **Streaming UI**: shows incremental Gemini output as the response arrives
 
 ---
 
-## Deployment
-
-### GitHub Pages (recommended)
-```bash
-git add .
-git commit -m "LegalEase"
-git push origin main
-# Enable Pages in repo Settings → Pages → Deploy from main branch
-```
-
-### Streamlit Cloud (if required)
-Create `app.py`:
-```python
-import streamlit as st, pathlib
-st.set_page_config(layout="wide")
-st.components.v1.html(pathlib.Path("index.html").read_text(), height=900, scrolling=True)
-```
-Then deploy to [streamlit.io/cloud](https://streamlit.io/cloud).
-
----
-
-## Generation Config
-
-```json
-{
-  "temperature": 0.2,
-  "maxOutputTokens": 2048,
-  "topP": 0.85,
-  "topK": 40
-}
-```
-
-Low temperature (0.2) is critical for legal applications — minimises hallucination and keeps responses grounded in actual statute.
-
----
-
-*LegalEase — Making Indian law understandable for everyone.*
+*This README is written to help a reviewer quickly understand the website’s purpose, architecture, and capabilities.*
