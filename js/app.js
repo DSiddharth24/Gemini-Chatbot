@@ -104,34 +104,37 @@
     for (const file of fileList) {
       const ext = file.name.split('.').pop().toLowerCase();
 
-      if (ext === 'docx' || ext === 'txt') {
-        // Show a loading chip while extracting
+      if (ext === 'docx') {
+        // Extract text in-browser via mammoth.js
         const placeholder = { name: file.name, mimeType: 'text/plain', extractedText: null, loading: true };
         state.files.push(placeholder);
         renderChips();
-
         try {
-          const formData = new FormData();
-          formData.append('file', file);
-
-          const res = await fetch('/api/extract', { method: 'POST', body: formData });
-
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
-            throw new Error(err.error || `Server error ${res.status}`);
-          }
-
-          const data = await res.json();
-          if (data.error) throw new Error(data.error);
-          if (!data.text || data.text.trim().length === 0) throw new Error('Document appears to be empty or could not be read.');
-
-          // Update placeholder with real data
-          placeholder.extractedText = data.text;
-          placeholder.loading = false;
+          const arrayBuffer = await file.arrayBuffer();
+          const result      = await mammoth.extractRawText({ arrayBuffer });
+          const text        = result.value.trim();
+          if (!text) throw new Error('Document is empty or could not be read.');
+          placeholder.extractedText = text;
+          placeholder.loading       = false;
           renderChips();
-
         } catch (err) {
-          // Remove the placeholder and show error in chat
+          state.files = state.files.filter(f => f !== placeholder);
+          renderChips();
+          showError(`Could not read "${file.name}": ${err.message}`);
+        }
+
+      } else if (ext === 'txt') {
+        // Read plain text directly in browser
+        const placeholder = { name: file.name, mimeType: 'text/plain', extractedText: null, loading: true };
+        state.files.push(placeholder);
+        renderChips();
+        try {
+          const text = await file.text();
+          if (!text.trim()) throw new Error('File is empty.');
+          placeholder.extractedText = text;
+          placeholder.loading       = false;
+          renderChips();
+        } catch (err) {
           state.files = state.files.filter(f => f !== placeholder);
           renderChips();
           showError(`Could not read "${file.name}": ${err.message}`);
@@ -245,6 +248,19 @@
 
     if (!text && files.length === 0) return;
 
+    // If files attached but no message typed, add a default prompt based on mode
+    const modeDefaults = {
+      risk:      'Analyse this document for legal risks under Indian law.',
+      missing:   'Check this document for missing standard clauses.',
+      compare:   'Compare these documents and highlight significant changes.',
+      simplify:  'Simplify this document into plain English.',
+      ipc:       'Identify relevant IPC sections in this document.',
+      draft:     'Review and suggest improvements to the clauses in this document.',
+      summarise: 'Summarise this document.',
+      general:   'Analyse this legal document.',
+    };
+    const effectiveText = text || modeDefaults[state.mode] || 'Analyse this document.';
+
     // Reset input
     state.files = [];
     renderChips();
@@ -252,8 +268,9 @@
     autoResize();
     dom.emptyState.style.display = 'none';
 
-    // User message
-    addMsg('user', text + (files.length ? ` [${files.map(f => f.name).join(', ')}]` : ''));
+    // User message display
+    const displayText = effectiveText + (files.length ? ` [${files.map(f => f.name).join(', ')}]` : '');
+    addMsg('user', displayText);
 
     // Pipeline
     if (files.length) {
@@ -271,13 +288,12 @@
 
     Pipeline.setGeminiActive();
 
-    // AI bubble
     const aiEl     = addMsg('ai', '', { streaming: true });
     const bubbleEl = aiEl.querySelector('.msg-bubble');
 
     try {
       await GeminiAPI.streamMessage({
-        userMessage:   text,
+        userMessage:   effectiveText,
         fileDataArray: files,
         history:       state.history,
         mode:          state.mode,
@@ -290,17 +306,20 @@
         onDone: (final) => {
           Pipeline.setGeminiDone();
           Pipeline.setParseActive();
-
           bubbleEl.innerHTML = Parser.processResponse(final, state.mode);
           bubbleEl.classList.remove('typing');
           Pipeline.setParseDone();
-
           attachActions(aiEl, final);
 
-          // Record history (in-memory only)
           const uParts = [];
-          files.forEach(f => uParts.push({ inline_data: { mime_type: f.mimeType, data: f.data } }));
-          if (text) uParts.push({ text });
+          files.forEach(f => {
+            if (f.extractedText) {
+              uParts.push({ text: `[Document: ${f.name}]\n\n${f.extractedText}` });
+            } else {
+              uParts.push({ inline_data: { mime_type: f.mimeType, data: f.data } });
+            }
+          });
+          if (effectiveText) uParts.push({ text: effectiveText });
           state.history.push({ role: 'user',  parts: uParts });
           state.history.push({ role: 'model', parts: [{ text: final }] });
 
