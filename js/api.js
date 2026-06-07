@@ -5,7 +5,7 @@
 
 const GeminiAPI = (() => {
   const PROXY    = '/api/chat';
-  const MODEL    = 'gemini-1.5-pro';
+  const MODEL    = 'gemini-2.0-flash';
 
   const GENERATION_CONFIG = {
     temperature:     0.2,
