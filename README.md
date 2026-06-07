@@ -67,7 +67,7 @@ The left button is for theme toggle(dark and light) and the right button for del
 ## Documents for testing purposes
 - [Synova_ServiceAgreement_FIXED.docx](https://github.com/user-attachments/files/28686149/Synova_ServiceAgreement_FIXED.docx)
 - [Synova_ServiceAgreement_FLAWED.docx](https://github.com/user-attachments/files/28686151/Synova_ServiceAgreement_FLAWED.docx)
-- Note: These are fake documents and the content is quite large. So longer respones are expected.
+- Note: These are fake documents.
 
 ---
 
