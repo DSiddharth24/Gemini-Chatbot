@@ -38,7 +38,7 @@ https://gemini-chatbot-4mmq.onrender.com/
 
 <img width="791" height="58" alt="Screenshot 2026-06-07 233950" src="https://github.com/user-attachments/assets/5c540b71-121f-4b13-a633-a8ed8389af83" />
 
-LegalEase offers 8 specialised analysis modes, each instructing Gemini 1.5 Pro differently to produce a specific type of legal output. Switch between modes with a single click at the top of the chat.
+LegalEase offers 8 specialised analysis modes, each instructing Gemini differently to produce a specific type of legal output. Switch between modes with a single click at the top of the chat.
 - **💬 Q&A** — Ask any legal question and get answers with citations to Indian statutes, IPC sections, and relevant case law.
 - **⚠ Risk** — Scans every clause and returns a colour-coded heatmap of High, Medium, and Low risk findings extracted directly from Gemini's response.
 - **🔍 Missing** — Checks your document against standard Indian contract templates and lists every clause that is absent, along with why it matters.
