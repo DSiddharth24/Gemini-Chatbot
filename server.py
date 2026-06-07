@@ -46,8 +46,21 @@ def chat():
     )
 
     if not upstream.ok:
-        return Response(upstream.text, status=upstream.status_code,
-                        mimetype="application/json")
+        # If rate limited, return a clean error message
+        try:
+            err_body = upstream.json()
+            err_msg  = err_body.get("error", {}).get("message", upstream.text)
+        except Exception:
+            err_msg = upstream.text
+
+        if upstream.status_code == 429:
+            err_msg = "Too many requests — please wait a moment and try again."
+
+        return Response(
+            json.dumps({"error": {"message": err_msg}}),
+            status=upstream.status_code,
+            mimetype="application/json",
+        )
 
     def generate():
         for chunk in upstream.iter_content(chunk_size=None):
