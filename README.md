@@ -105,7 +105,7 @@ Gemini-Chatbot-2/
 - The server enforces the model temperature from environment settings and handles request streaming.
 - No API key is exposed to the browser.
 
-### Why it stands out for judges
+### Why it stands out ?
 - Combines AI, legal reasoning, and document processing in one browser app.
 - Implements a **robust, production-ready architecture** with secure backend proxying, streaming AI integration, and clear frontend/backend separation.
 - Shows deliberate design: legal prompt engineering, structured output parsing, and live streaming.
