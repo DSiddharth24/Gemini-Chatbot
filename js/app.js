@@ -1,55 +1,47 @@
 /**
  * app.js — Main application controller
- * No localStorage. All state is in-memory.
+ * All state is in-memory only. Nothing is persisted.
  */
 
 (function () {
   'use strict';
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  const MAX_FILE_SIZE_MB = 20;
+
   const state = {
-    mode:      'general',
-    lang:      'en',
-    history:   [],      // Gemini [{role, parts}] — in memory only
-    files:     [],      // [{name, mimeType, data}] — current turn attachments
-    generating: false,
-    session:    null,
-    theme:      'light',
+    mode:          'general',
+    lang:          'en',
+    history:       [],   // Gemini [{role, parts}]
+    files:         [],   // processed file objects
+    generating:    false,
+    theme:         'light',
     mediaRecorder: null,
     isRecording:   false,
   };
 
-  // ── DOM ────────────────────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
   const dom = {
-    // Header
-    modeBar:       $('modeBar'),
-    themeBtn:      $('themeBtn'),
-    themeIcon:     $('themeIcon'),
-    clearBtn:      $('clearBtn'),
-
-    // Main
-    main:          $('main'),
-    pipelineBar:   $('pipelineBar'),
-    emptyState:    $('emptyState'),
-    messages:      $('messages'),
+    modeBar:         $('modeBar'),
+    themeBtn:        $('themeBtn'),
+    themeIcon:       $('themeIcon'),
+    clearBtn:        $('clearBtn'),
+    main:            $('main'),
+    pipelineBar:     $('pipelineBar'),
+    emptyState:      $('emptyState'),
+    messages:        $('messages'),
     suggestionChips: $('suggestionChips'),
-
-    // Input
-    attachBtn:     $('attachBtn'),
-    fileInput:     $('fileInput'),
-    attachedRow:   $('attachedRow'),
-    messageInput:  $('messageInput'),
-    micBtn:        $('micBtn'),
-    sendBtn:       $('sendBtn'),
-    sendIcon:      $('sendIcon'),
-    statusText:    $('statusText'),
-    clauseCount:   $('clauseCount'),
+    attachBtn:       $('attachBtn'),
+    fileInput:       $('fileInput'),
+    attachedRow:     $('attachedRow'),
+    messageInput:    $('messageInput'),
+    micBtn:          $('micBtn'),
+    sendBtn:         $('sendBtn'),
+    statusText:      $('statusText'),
+    clauseCount:     $('clauseCount'),
   };
 
   // ── Boot ───────────────────────────────────────────────────────────────────
   function init() {
-    state.session = Storage.createNewSession();
     applyTheme('light');
     setModeUI('general');
     bind();
@@ -60,7 +52,6 @@
   function applyTheme(t) {
     state.theme = t;
     document.documentElement.setAttribute('data-theme', t);
-    // Swap icon: moon = dark mode toggle, sun = light mode toggle
     dom.themeIcon.innerHTML = t === 'dark'
       ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
       : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
@@ -68,11 +59,10 @@
 
   // ── Mode ───────────────────────────────────────────────────────────────────
   function setModeUI(mode) {
-    document.querySelectorAll('.mode-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.mode === mode);
-    });
-    const cfg = Modes.get(mode);
-    dom.messageInput.placeholder = cfg.placeholder;
+    document.querySelectorAll('.mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === mode)
+    );
+    dom.messageInput.placeholder = Modes.get(mode).placeholder;
   }
 
   function setMode(mode) {
@@ -80,19 +70,15 @@
     setModeUI(mode);
   }
 
-  // ── Language (fixed to English) ───────────────────────────────────────────
-  // Language toggle removed — English only
-
-  // ── Clear session ──────────────────────────────────────────────────────────
+  // ── Clear ──────────────────────────────────────────────────────────────────
   function clearSession() {
-    state.history  = [];
-    state.files    = [];
-    state.session  = Storage.createNewSession();
-    dom.messages.innerHTML = '';
+    state.history = [];
+    state.files   = [];
+    dom.messages.innerHTML       = '';
     dom.emptyState.style.display = '';
-    dom.attachedRow.innerHTML = '';
+    dom.attachedRow.innerHTML    = '';
+    dom.pipelineBar.hidden       = true;
     Pipeline.resetPipeline();
-    dom.pipelineBar.hidden = true;
     setStatus('ready', 'Ready');
     updateClauseCount();
     dom.messageInput.value = '';
@@ -100,61 +86,75 @@
   }
 
   // ── File handling ──────────────────────────────────────────────────────────
+  const FILE_SIZE_LIMIT = MAX_FILE_SIZE_MB * 1024 * 1024;
+
   async function handleFiles(fileList) {
     for (const file of fileList) {
+      // Size guard
+      if (file.size > FILE_SIZE_LIMIT) {
+        showError(`"${file.name}" is too large (${(file.size/1024/1024).toFixed(1)} MB). Maximum is ${MAX_FILE_SIZE_MB} MB.`);
+        continue;
+      }
+
       const ext = file.name.split('.').pop().toLowerCase();
 
       if (ext === 'docx') {
-        // Extract text in-browser via mammoth.js
-        const placeholder = { name: file.name, mimeType: 'text/plain', extractedText: null, loading: true };
-        state.files.push(placeholder);
-        renderChips();
-        try {
-          const arrayBuffer = await file.arrayBuffer();
-          const result      = await mammoth.extractRawText({ arrayBuffer });
-          const text        = result.value.trim();
-          if (!text) throw new Error('Document is empty or could not be read.');
-          placeholder.extractedText = text;
-          placeholder.loading       = false;
-          renderChips();
-        } catch (err) {
-          state.files = state.files.filter(f => f !== placeholder);
-          renderChips();
-          showError(`Could not read "${file.name}": ${err.message}`);
-        }
-
+        await extractDocx(file);
       } else if (ext === 'txt') {
-        // Read plain text directly in browser
-        const placeholder = { name: file.name, mimeType: 'text/plain', extractedText: null, loading: true };
-        state.files.push(placeholder);
-        renderChips();
-        try {
-          const text = await file.text();
-          if (!text.trim()) throw new Error('File is empty.');
-          placeholder.extractedText = text;
-          placeholder.loading       = false;
-          renderChips();
-        } catch (err) {
-          state.files = state.files.filter(f => f !== placeholder);
-          renderChips();
-          showError(`Could not read "${file.name}": ${err.message}`);
-        }
-
+        await extractTxt(file);
       } else {
-        // PDF / image / audio — base64 for Gemini inline_data
-        const b64  = await toBase64(file);
-        const mime = file.type || guessMime(file.name);
-        state.files.push({ name: file.name, mimeType: mime, data: b64 });
-        renderChips();
+        await addBinaryFile(file);
       }
     }
   }
 
-  function showError(msg) {
-    dom.emptyState.style.display = 'none';
-    const el = addMsg('ai', '', {});
-    el.querySelector('.msg-bubble').innerHTML =
-      `<p style="color:var(--danger)">⚠ ${esc(msg)}</p>`;
+  async function extractDocx(file) {
+    const placeholder = makePlaceholder(file.name);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const result      = await mammoth.extractRawText({ arrayBuffer });
+      const text        = result.value.trim();
+      if (!text) throw new Error('Document is empty or has no readable text.');
+      placeholder.extractedText = text;
+      placeholder.loading       = false;
+      renderChips();
+    } catch (err) {
+      removePlaceholder(placeholder);
+      showError(`Could not read "${file.name}": ${err.message}`);
+    }
+  }
+
+  async function extractTxt(file) {
+    const placeholder = makePlaceholder(file.name);
+    try {
+      const text = await file.text();
+      if (!text.trim()) throw new Error('File is empty.');
+      placeholder.extractedText = text.trim();
+      placeholder.loading       = false;
+      renderChips();
+    } catch (err) {
+      removePlaceholder(placeholder);
+      showError(`Could not read "${file.name}": ${err.message}`);
+    }
+  }
+
+  async function addBinaryFile(file) {
+    const b64  = await toBase64(file);
+    const mime = file.type || guessMime(file.name);
+    state.files.push({ name: file.name, mimeType: mime, data: b64 });
+    renderChips();
+  }
+
+  function makePlaceholder(name) {
+    const ph = { name, mimeType: 'text/plain', extractedText: null, loading: true };
+    state.files.push(ph);
+    renderChips();
+    return ph;
+  }
+
+  function removePlaceholder(ph) {
+    state.files = state.files.filter(f => f !== ph);
+    renderChips();
   }
 
   function toBase64(file) {
@@ -167,24 +167,24 @@
   }
 
   function guessMime(name) {
-    const m = { pdf:'application/pdf', png:'image/png', jpg:'image/jpeg',
-                jpeg:'image/jpeg', webp:'image/webp', wav:'audio/wav', mp3:'audio/mpeg',
-                docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                txt:'text/plain' };
+    const m = {
+      pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg',
+      jpeg: 'image/jpeg', webp: 'image/webp', wav: 'audio/wav', mp3: 'audio/mpeg',
+    };
     return m[name.split('.').pop().toLowerCase()] || 'application/octet-stream';
   }
 
   function renderChips() {
     dom.attachedRow.innerHTML = '';
     state.files.forEach((f, i) => {
-      const chip = document.createElement('div');
+      const chip  = document.createElement('div');
       chip.className = 'file-chip';
-      const icon = f.loading ? '⏳' : mimeIcon(f.mimeType);
+      const icon  = f.loading ? '⏳' : mimeIcon(f.mimeType);
       const label = f.loading ? `Reading ${esc(f.name)}…` : esc(f.name);
       chip.innerHTML = `
         <span>${icon}</span>
         <span class="file-chip-name" title="${esc(f.name)}">${label}</span>
-        ${f.loading ? '' : `<button class="file-chip-rm" data-i="${i}" aria-label="Remove ${esc(f.name)}">✕</button>`}`;
+        ${f.loading ? '' : `<button class="file-chip-rm" aria-label="Remove">✕</button>`}`;
       if (!f.loading) {
         chip.querySelector('.file-chip-rm').onclick = () => {
           state.files.splice(i, 1);
@@ -199,7 +199,7 @@
     if (m.includes('pdf'))   return '📄';
     if (m.includes('image')) return '🖼';
     if (m.includes('audio')) return '🎵';
-    if (m.includes('word') || m.includes('text')) return '📝';
+    if (m.includes('text') || m.includes('word')) return '📝';
     return '📎';
   }
 
@@ -207,20 +207,32 @@
   async function toggleMic() {
     if (state.isRecording) { stopMic(); return; }
     try {
-      const stream  = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec     = new MediaRecorder(stream);
-      const chunks  = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Pick a MIME type the browser actually supports
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+
+      const rec    = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+      const chunks = [];
+
       rec.ondataavailable = e => chunks.push(e.data);
       rec.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' });
-        await handleFiles([new File([blob], 'voice_query.wav', { type: 'audio/wav' })]);
+        const actualMime = rec.mimeType || 'audio/webm';
+        const ext        = actualMime.includes('mp4') ? 'mp4' : 'webm';
+        const blob       = new Blob(chunks, { type: actualMime });
+        const audioFile  = new File([blob], `voice_query.${ext}`, { type: actualMime });
+        await addBinaryFile(audioFile);
         stream.getTracks().forEach(t => t.stop());
       };
+
       state.mediaRecorder = rec;
       state.isRecording   = true;
       rec.start();
       dom.micBtn.classList.add('recording');
-      dom.micBtn.setAttribute('aria-label', 'Stop recording');
     } catch {
       alert('Microphone access denied.');
     }
@@ -230,14 +242,22 @@
     state.mediaRecorder?.stop();
     state.isRecording = false;
     dom.micBtn.classList.remove('recording');
-    dom.micBtn.setAttribute('aria-label', 'Voice query');
   }
 
   // ── Send ───────────────────────────────────────────────────────────────────
+  const MODE_DEFAULTS = {
+    risk:      'Analyse this document for legal risks under Indian law.',
+    missing:   'Check this document for missing standard clauses.',
+    compare:   'Compare these documents and highlight significant changes.',
+    simplify:  'Simplify this document into plain English.',
+    ipc:       'Identify relevant IPC sections in this document.',
+    draft:     'Review and suggest improvements to the clauses in this document.',
+    summarise: 'Summarise this document.',
+    general:   'Analyse this legal document.',
+  };
+
   async function send(overrideText = null) {
     if (state.generating) return;
-
-    // Block if any file is still being extracted
     if (state.files.some(f => f.loading)) {
       showError('Please wait — document is still being read.');
       return;
@@ -245,34 +265,21 @@
 
     const text  = (overrideText ?? dom.messageInput.value).trim();
     const files = [...state.files];
-
     if (!text && files.length === 0) return;
 
-    // If files attached but no message typed, add a default prompt based on mode
-    const modeDefaults = {
-      risk:      'Analyse this document for legal risks under Indian law.',
-      missing:   'Check this document for missing standard clauses.',
-      compare:   'Compare these documents and highlight significant changes.',
-      simplify:  'Simplify this document into plain English.',
-      ipc:       'Identify relevant IPC sections in this document.',
-      draft:     'Review and suggest improvements to the clauses in this document.',
-      summarise: 'Summarise this document.',
-      general:   'Analyse this legal document.',
-    };
-    const effectiveText = text || modeDefaults[state.mode] || 'Analyse this document.';
+    const effectiveText = text || MODE_DEFAULTS[state.mode] || 'Analyse this document.';
 
-    // Reset input
+    // Reset UI
     state.files = [];
     renderChips();
     dom.messageInput.value = '';
     autoResize();
     dom.emptyState.style.display = 'none';
 
-    // User message display
-    const displayText = effectiveText + (files.length ? ` [${files.map(f => f.name).join(', ')}]` : '');
-    addMsg('user', displayText);
+    // Show user message
+    addMsg('user', effectiveText + (files.length ? ` [${files.map(f => f.name).join(', ')}]` : ''));
 
-    // Pipeline
+    // Run pipeline stages 1–3 for visual feedback
     if (files.length) {
       dom.pipelineBar.hidden = false;
       await Pipeline.run(files);
@@ -285,83 +292,83 @@
     const clauseCtx = Pipeline.buildClauseContext();
     await tick(80);
     Pipeline.setStepState('prompt', 'done');
-
     Pipeline.setGeminiActive();
 
     const aiEl     = addMsg('ai', '', { streaming: true });
     const bubbleEl = aiEl.querySelector('.msg-bubble');
 
-    try {
-      await GeminiAPI.streamMessage({
-        userMessage:   effectiveText,
-        fileDataArray: files,
-        history:       state.history,
-        mode:          state.mode,
-        lang:          state.lang,
-        clauseContext: clauseCtx,
-        onChunk: (_, acc) => {
-          bubbleEl.textContent = acc;
-          scrollDown();
-        },
-        onDone: (final) => {
-          Pipeline.setGeminiDone();
-          Pipeline.setParseActive();
-          bubbleEl.innerHTML = Parser.processResponse(final, state.mode);
-          bubbleEl.classList.remove('typing');
-          Pipeline.setParseDone();
-          attachActions(aiEl, final);
+    await GeminiAPI.streamMessage({
+      userMessage:   effectiveText,
+      fileDataArray: files,
+      history:       state.history,
+      mode:          state.mode,
+      lang:          'en',
+      clauseContext: clauseCtx,
 
-          const uParts = [];
-          files.forEach(f => {
-            if (f.extractedText) {
-              uParts.push({ text: `[Document: ${f.name}]\n\n${f.extractedText}` });
-            } else {
-              uParts.push({ inline_data: { mime_type: f.mimeType, data: f.data } });
-            }
-          });
-          if (effectiveText) uParts.push({ text: effectiveText });
-          state.history.push({ role: 'user',  parts: uParts });
-          state.history.push({ role: 'model', parts: [{ text: final }] });
+      onChunk: (_, acc) => {
+        bubbleEl.textContent = acc;
+        scrollDown();
+      },
 
-          setStatus('ready', 'Ready');
-          updateClauseCount();
-          setGenerating(false);
-          scrollDown();
-        },
-        onError: (err) => {
-          Pipeline.setGeminiError();
-          bubbleEl.innerHTML = `<p style="color:var(--danger)">⚠ ${esc(err.message)}</p>
-            <p style="font-size:12px;color:var(--text-3);margin-top:4px">Check your API key and try again.</p>`;
-          bubbleEl.classList.remove('typing');
-          setStatus('error', 'Error');
-          setGenerating(false);
-        },
-      });
-    } catch (_) { /* handled in onError */ }
+      onDone: (final) => {
+        Pipeline.setGeminiDone();
+        Pipeline.setParseActive();
+
+        bubbleEl.innerHTML = Parser.processResponse(final, state.mode);
+        bubbleEl.classList.remove('typing');
+        Pipeline.setParseDone();
+        attachActions(aiEl, final);
+
+        // Build history entry — only include files that have actual content
+        const uParts = [];
+        for (const f of files) {
+          if (f.extractedText) {
+            uParts.push({ text: `[Document: ${f.name}]\n\n${f.extractedText}` });
+          } else if (f.data) {
+            uParts.push({ inline_data: { mime_type: f.mimeType, data: f.data } });
+          }
+        }
+        uParts.push({ text: effectiveText });
+
+        state.history.push({ role: 'user',  parts: uParts });
+        state.history.push({ role: 'model', parts: [{ text: final }] });
+
+        setStatus('ready', 'Ready');
+        updateClauseCount();
+        setGenerating(false);
+        scrollDown();
+      },
+
+      onError: (err) => {
+        Pipeline.setGeminiError();
+        bubbleEl.innerHTML = `
+          <p style="color:var(--danger)">⚠ ${esc(err.message)}</p>
+          <p style="font-size:12px;color:var(--text-3);margin-top:4px">
+            If this keeps happening, check your API key or wait a moment and retry.
+          </p>`;
+        bubbleEl.classList.remove('typing');
+        setStatus('error', 'Error');
+        setGenerating(false);
+      },
+    });
   }
 
   function setGenerating(val) {
     state.generating     = val;
     dom.sendBtn.disabled = val;
-
-    if (val) {
-      // Replace SVG icon with spinner div
-      dom.sendBtn.innerHTML = '<div class="spinner"></div>';
-    } else {
-      // Restore SVG send icon
-      dom.sendBtn.innerHTML = `
-        <svg id="sendIcon" width="16" height="16" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2.5"
-          stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"/>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-        </svg>`;
-    }
+    dom.sendBtn.innerHTML = val
+      ? '<div class="spinner"></div>'
+      : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round">
+           <line x1="22" y1="2" x2="11" y2="13"/>
+           <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+         </svg>`;
   }
 
   // ── Message rendering ──────────────────────────────────────────────────────
   function addMsg(role, content, opts = {}) {
-    const wrap   = document.createElement('div');
+    const wrap = document.createElement('div');
     wrap.className = `msg ${role}`;
 
     const avatar = document.createElement('div');
@@ -374,13 +381,11 @@
 
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble' + (opts.streaming ? ' typing' : '');
+    bubble.textContent = '';
 
-    if (opts.streaming) {
-      bubble.textContent = '';
-    } else if (opts.isHtml) {
-      bubble.innerHTML = content;
-    } else {
-      bubble.innerHTML = content ? `<p>${esc(content)}</p>` : '';
+    if (!opts.streaming) {
+      if (opts.isHtml) { bubble.innerHTML = content; }
+      else { bubble.innerHTML = content ? `<p>${esc(content)}</p>` : ''; }
     }
 
     const time = document.createElement('div');
@@ -398,20 +403,25 @@
     return wrap;
   }
 
+  function showError(msg) {
+    dom.emptyState.style.display = 'none';
+    const el = addMsg('ai', '', {});
+    el.querySelector('.msg-bubble').innerHTML =
+      `<p style="color:var(--danger)">⚠ ${esc(msg)}</p>`;
+  }
+
   function attachActions(wrapEl, rawText) {
     const body    = wrapEl.querySelector('.msg-body');
     const actions = document.createElement('div');
     actions.className = 'msg-actions';
 
-    const copyBtn = makeAction('Copy', () => {
+    const copyBtn   = makeAction('Copy', () => {
       navigator.clipboard.writeText(rawText).then(() => {
         copyBtn.textContent = 'Copied';
         setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
       });
     });
-
-    const readBtn = makeAction('Read aloud', () => readAloud(rawText, readBtn));
-
+    const readBtn   = makeAction('Read aloud', () => readAloud(rawText, readBtn));
     const followBtn = makeAction('Follow-up', () => {
       dom.messageInput.value = 'Regarding your previous response: ';
       dom.messageInput.focus();
@@ -426,52 +436,46 @@
 
   function makeAction(label, fn) {
     const b = document.createElement('button');
-    b.className = 'msg-action';
+    b.className   = 'msg-action';
     b.textContent = label;
     b.addEventListener('click', fn);
     return b;
   }
 
-  // ── Read aloud ─────────────────────────────────────────────────────────────
-  let ttsUtterance = null;
+  // ── TTS ────────────────────────────────────────────────────────────────────
+  let ttsUtt = null;
 
   function readAloud(text, btn) {
-    if (!window.speechSynthesis) { alert('TTS not supported in this browser.'); return; }
-    if (ttsUtterance) {
+    if (!window.speechSynthesis) { alert('TTS not supported.'); return; }
+    if (ttsUtt) {
       speechSynthesis.cancel();
-      ttsUtterance = null;
+      ttsUtt = null;
       btn.textContent = 'Read aloud';
       return;
     }
-    const locale = { en:'en-IN', kn:'kn-IN', hi:'hi-IN' }[state.lang] || 'en-IN';
-    const clean  = text
-      .replace(/\[(HIGH|MED|LOW|MISSING|SIGNIFICANT|PRESENT)\]:/g, '$1 risk.')
+    const clean = text
+      .replace(/\[(HIGH|MED|LOW|MISSING|SIGNIFICANT|PRESENT)\]:/g, '$1.')
       .replace(/[*_#>`]/g, '').replace(/\n+/g, '. ');
-
-    const utt = new SpeechSynthesisUtterance(clean);
-    utt.lang  = locale;
-    utt.rate  = 0.92;
+    const utt   = new SpeechSynthesisUtterance(clean);
+    utt.lang    = 'en-IN';
+    utt.rate    = 0.92;
     utt.onstart = () => { btn.textContent = 'Stop'; };
-    utt.onend   = () => { btn.textContent = 'Read aloud'; ttsUtterance = null; };
-    utt.onerror = () => { btn.textContent = 'Read aloud'; ttsUtterance = null; };
-    ttsUtterance = utt;
+    utt.onend   = () => { btn.textContent = 'Read aloud'; ttsUtt = null; };
+    utt.onerror = () => { btn.textContent = 'Read aloud'; ttsUtt = null; };
+    ttsUtt = utt;
     speechSynthesis.speak(utt);
   }
 
-  // ── Status helpers ─────────────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
   function setStatus(cls, text) {
-    dom.statusText.className = cls;
+    dom.statusText.className   = cls;
     dom.statusText.textContent = text;
   }
 
   function updateClauseCount() {
     const n = Pipeline.getClauseCount();
-    if (n > 0) {
-      dom.clauseCount.textContent = `${n} clauses indexed`;
-      dom.clauseCount.style.display = '';
-    } else {
-      dom.clauseCount.style.display = 'none';
-    }
+    dom.clauseCount.textContent    = n > 0 ? `${n} clauses indexed` : '';
+    dom.clauseCount.style.display  = n > 0 ? '' : 'none';
   }
 
   function scrollDown() {
@@ -491,58 +495,35 @@
 
   function tick(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  // ── Event binding ──────────────────────────────────────────────────────────
+  // ── Events ─────────────────────────────────────────────────────────────────
   function bind() {
-    // Theme
-    dom.themeBtn.addEventListener('click', () => {
-      applyTheme(state.theme === 'dark' ? 'light' : 'dark');
-    });
-
-    // Clear
+    dom.themeBtn.addEventListener('click', () =>
+      applyTheme(state.theme === 'dark' ? 'light' : 'dark')
+    );
     dom.clearBtn.addEventListener('click', clearSession);
-
-    // Modes
     dom.modeBar.addEventListener('click', e => {
       const b = e.target.closest('.mode-btn');
       if (b) setMode(b.dataset.mode);
     });
-
-    // Files
     dom.attachBtn.addEventListener('click', () => dom.fileInput.click());
     dom.fileInput.addEventListener('change', e => {
       handleFiles(Array.from(e.target.files));
       e.target.value = '';
     });
-
-    // Drag & drop onto main
     dom.main.addEventListener('dragover', e => e.preventDefault());
     dom.main.addEventListener('drop', e => {
       e.preventDefault();
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length) handleFiles(files);
+      handleFiles(Array.from(e.dataTransfer.files));
     });
-
-    // Mic
     dom.micBtn.addEventListener('click', toggleMic);
-
-    // Textarea
     dom.messageInput.addEventListener('input', autoResize);
     dom.messageInput.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     });
-
-    // Send
     dom.sendBtn.addEventListener('click', () => send());
-
-    // Suggestions
     dom.suggestionChips.addEventListener('click', e => {
       const chip = e.target.closest('.chip');
       if (chip) send(chip.dataset.query);
-    });
-
-    // Escape key — no-op (no modal)
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { /* reserved */ }
     });
   }
 

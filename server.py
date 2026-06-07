@@ -1,16 +1,12 @@
 """
 server.py — LegalEase backend
-Reads GEMINI_API_KEY from .env and proxies requests to Gemini.
-Also handles .docx / .txt extraction server-side since Gemini
-only accepts PDF and images natively.
+Proxies Gemini API requests. API key never reaches the browser.
 """
 
 import os
-import io
 import json
-import base64
 import requests
-from flask import Flask, request, Response, send_from_directory
+from flask import Flask, request, Response, send_from_directory, jsonify
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,55 +25,29 @@ def index():
     return send_from_directory(".", "index.html")
 
 
-# ── DOCX / TXT extraction endpoint ─────────────────────────────────────────
-@app.route("/api/extract", methods=["POST"])
-def extract():
-    """
-    Accepts a file upload, extracts plain text, returns it as JSON.
-    Supports: .docx, .txt
-    """
-    if "file" not in request.files:
-        return {"error": "No file provided"}, 400
-
-    f        = request.files["file"]
-    filename = f.filename.lower()
-
-    try:
-        if filename.endswith(".docx"):
-            from docx import Document
-            doc   = Document(io.BytesIO(f.read()))
-            text  = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-
-        elif filename.endswith(".txt"):
-            text = f.read().decode("utf-8", errors="replace")
-
-        else:
-            return {"error": f"Unsupported file type: {filename}"}, 400
-
-        return {"text": text, "filename": f.filename}
-
-    except Exception as e:
-        return {"error": str(e)}, 500
-
-
 # ── Gemini proxy ────────────────────────────────────────────────────────────
 @app.route("/api/chat", methods=["POST"])
 def chat():
     body = request.get_json(force=True)
 
-    # Override temperature from server env
+    # Enforce temperature from server env — client cannot override it
     body.setdefault("generationConfig", {})
     body["generationConfig"]["temperature"] = TEMPERATURE
 
     url = f"{ENDPOINT}?key={API_KEY}&alt=sse"
 
-    upstream = requests.post(
-        url,
-        json=body,
-        stream=True,
-        headers={"Content-Type": "application/json"},
-        timeout=120,
-    )
+    try:
+        upstream = requests.post(
+            url,
+            json=body,
+            stream=True,
+            headers={"Content-Type": "application/json"},
+            timeout=180,
+        )
+    except requests.exceptions.Timeout:
+        return jsonify({"error": {"message": "Request timed out. Try a shorter document."}}), 504
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": {"message": str(e)}}), 502
 
     if not upstream.ok:
         try:
@@ -89,25 +59,26 @@ def chat():
         if upstream.status_code == 429:
             err_msg = "Too many requests — please wait a moment and try again."
 
-        return Response(
-            json.dumps({"error": {"message": err_msg}}),
-            status=upstream.status_code,
-            mimetype="application/json",
-        )
+        return jsonify({"error": {"message": err_msg}}), upstream.status_code
 
     def generate():
-        for chunk in upstream.iter_content(chunk_size=None):
+        for chunk in upstream.iter_content(chunk_size=4096):
             if chunk:
                 yield chunk
 
     return Response(
         generate(),
-        status=upstream.status_code,
-        content_type=upstream.headers.get("Content-Type", "text/event-stream"),
-        headers={"X-Accel-Buffering": "no"},
+        status=200,
+        content_type="text/event-stream",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control":     "no-cache",
+            "Connection":        "keep-alive",
+        },
     )
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # threaded=True is essential for SSE — one thread per connection
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

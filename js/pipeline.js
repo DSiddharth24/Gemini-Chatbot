@@ -132,12 +132,11 @@ const Pipeline = (() => {
   }
 
   // ── Stage 4: Prompt Construction ────────────
-  function buildClauseContext(topK = 8) {
-    if (clauseIndex.length === 0) return '';
-
-    const top = clauseIndex.slice(0, topK);
-    const lines = top.map(c => `- ${c.clause} (from: ${c.source})`);
-    return `The document contains these ${clauseIndex.length} indexed clauses:\n${lines.join('\n')}`;
+  // Returns empty string — clause context is disabled.
+  // Gemini reads the actual document directly via inline_data or extracted text.
+  // A hardcoded clause list would mislead Gemini with fabricated context.
+  function buildClauseContext() {
+    return '';
   }
 
   // ── Stage 5 state helpers ────────────────────
