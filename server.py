@@ -1,11 +1,14 @@
 """
 server.py — LegalEase backend
 Reads GEMINI_API_KEY from .env and proxies requests to Gemini.
-The key never leaves the server.
+Also handles .docx / .txt extraction server-side since Gemini
+only accepts PDF and images natively.
 """
 
 import os
+import io
 import json
+import base64
 import requests
 from flask import Flask, request, Response, send_from_directory
 from dotenv import load_dotenv
@@ -14,24 +17,55 @@ load_dotenv()
 
 API_KEY     = os.environ["GEMINI_API_KEY"]
 TEMPERATURE = float(os.environ.get("GEMINI_TEMPERATURE", "0.2"))
-MODEL    = "gemini-2.5-flash"
-ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:streamGenerateContent"
+MODEL       = "gemini-2.5-flash"
+ENDPOINT    = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:streamGenerateContent"
 
 app = Flask(__name__, static_folder=".", static_url_path="")
 
 
-# ── Serve the frontend ──────────────────────────────────────────────────────
+# ── Serve frontend ──────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return send_from_directory(".", "index.html")
 
 
-# ── Gemini proxy ─────────────────────────────────────────────────────────────
+# ── DOCX / TXT extraction endpoint ─────────────────────────────────────────
+@app.route("/api/extract", methods=["POST"])
+def extract():
+    """
+    Accepts a file upload, extracts plain text, returns it as JSON.
+    Supports: .docx, .txt
+    """
+    if "file" not in request.files:
+        return {"error": "No file provided"}, 400
+
+    f        = request.files["file"]
+    filename = f.filename.lower()
+
+    try:
+        if filename.endswith(".docx"):
+            from docx import Document
+            doc   = Document(io.BytesIO(f.read()))
+            text  = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+
+        elif filename.endswith(".txt"):
+            text = f.read().decode("utf-8", errors="replace")
+
+        else:
+            return {"error": f"Unsupported file type: {filename}"}, 400
+
+        return {"text": text, "filename": f.filename}
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+# ── Gemini proxy ────────────────────────────────────────────────────────────
 @app.route("/api/chat", methods=["POST"])
 def chat():
     body = request.get_json(force=True)
 
-    # Override temperature from server env so the frontend can't tamper with it
+    # Override temperature from server env
     body.setdefault("generationConfig", {})
     body["generationConfig"]["temperature"] = TEMPERATURE
 
@@ -46,7 +80,6 @@ def chat():
     )
 
     if not upstream.ok:
-        # If rate limited, return a clean error message
         try:
             err_body = upstream.json()
             err_msg  = err_body.get("error", {}).get("message", upstream.text)

@@ -51,7 +51,13 @@ const GeminiAPI = (() => {
       // Build user parts
       const userParts = [];
       for (const file of fileDataArray) {
-        userParts.push({ inline_data: { mime_type: file.mimeType, data: file.data } });
+        if (file.extractedText) {
+          // .docx / .txt — injected as text so Gemini can read it
+          userParts.push({ text: `[Document: ${file.name}]\n\n${file.extractedText}` });
+        } else {
+          // PDF / image / audio — native inline_data
+          userParts.push({ inline_data: { mime_type: file.mimeType, data: file.data } });
+        }
       }
       if (userMessage.trim()) userParts.push({ text: userMessage });
 

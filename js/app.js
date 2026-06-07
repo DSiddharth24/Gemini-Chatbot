@@ -102,9 +102,27 @@
   // ── File handling ──────────────────────────────────────────────────────────
   async function handleFiles(fileList) {
     for (const file of fileList) {
-      const b64  = await toBase64(file);
-      const mime = file.type || guessMime(file.name);
-      state.files.push({ name: file.name, mimeType: mime, data: b64 });
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      if (ext === 'docx' || ext === 'txt') {
+        // Extract text server-side, send as text part to Gemini
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          const res  = await fetch('/api/extract', { method: 'POST', body: formData });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          // Store as extracted text type — handled specially in send()
+          state.files.push({ name: file.name, mimeType: 'text/plain', extractedText: data.text });
+        } catch (err) {
+          alert(`Could not read ${file.name}: ${err.message}`);
+        }
+      } else {
+        // PDF / image / audio — encode as base64 for Gemini inline_data
+        const b64  = await toBase64(file);
+        const mime = file.type || guessMime(file.name);
+        state.files.push({ name: file.name, mimeType: mime, data: b64 });
+      }
     }
     renderChips();
   }
@@ -120,7 +138,9 @@
 
   function guessMime(name) {
     const m = { pdf:'application/pdf', png:'image/png', jpg:'image/jpeg',
-                jpeg:'image/jpeg', webp:'image/webp', wav:'audio/wav', mp3:'audio/mpeg' };
+                jpeg:'image/jpeg', webp:'image/webp', wav:'audio/wav', mp3:'audio/mpeg',
+                docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                txt:'text/plain' };
     return m[name.split('.').pop().toLowerCase()] || 'application/octet-stream';
   }
 
@@ -145,6 +165,7 @@
     if (m.includes('pdf'))   return '📄';
     if (m.includes('image')) return '🖼';
     if (m.includes('audio')) return '🎵';
+    if (m.includes('word') || m.includes('text')) return '📝';
     return '📎';
   }
 
