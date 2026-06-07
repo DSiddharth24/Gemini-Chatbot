@@ -1,18 +1,17 @@
 /**
- * api.js — Gemini 1.5 Pro API integration
- * Handles: streaming SSE, multimodal input, conversation history,
- * system instructions, safety settings, generation config
+ * api.js — Gemini proxy client
+ * Calls /api/chat on our own server — the API key never touches the browser.
  */
 
 const GeminiAPI = (() => {
+  const PROXY    = '/api/chat';
   const MODEL    = 'gemini-1.5-pro';
-  const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent`;
 
   const GENERATION_CONFIG = {
-    temperature:      0.2,   // Low temp = grounded legal reasoning
-    maxOutputTokens:  2048,
-    topP:             0.85,
-    topK:             40,
+    temperature:     0.2,
+    maxOutputTokens: 2048,
+    topP:            0.85,
+    topK:            40,
   };
 
   const SAFETY_SETTINGS = [
@@ -23,91 +22,62 @@ const GeminiAPI = (() => {
   ];
 
   /**
-   * Stream a response from Gemini 1.5 Pro
+   * Stream a response via the server proxy.
    * @param {Object} options
-   * @param {string}   options.apiKey         — Gemini API key
-   * @param {string}   options.userMessage     — current user text
-   * @param {Array}    options.fileDataArray   — [{name, mimeType, data (base64)}]
-   * @param {Array}    options.history         — conversation history [{role, parts:[{text}]}]
-   * @param {string}   options.mode            — active analysis mode key
-   * @param {string}   options.lang            — 'en' | 'kn' | 'hi'
-   * @param {string}   options.clauseContext   — clause index string from pipeline
-   * @param {function} options.onChunk         — called with each text delta (string)
-   * @param {function} options.onDone          — called when stream ends
-   * @param {function} options.onError         — called on error (Error)
+   * @param {string}   options.userMessage
+   * @param {Array}    options.fileDataArray  [{name, mimeType, data}]
+   * @param {Array}    options.history        Gemini [{role, parts}]
+   * @param {string}   options.mode
+   * @param {string}   options.lang           'en' | 'kn' | 'hi'
+   * @param {string}   options.clauseContext
+   * @param {function} options.onChunk        (delta, accumulated) => void
+   * @param {function} options.onDone         (fullText) => void
+   * @param {function} options.onError        (Error) => void
    */
   async function streamMessage({
-    apiKey,
     userMessage,
     fileDataArray = [],
-    history = [],
-    mode = 'general',
-    lang = 'en',
+    history       = [],
+    mode          = 'general',
+    lang          = 'en',
     clauseContext = '',
     onChunk,
     onDone,
     onError,
   }) {
     try {
-      // ── Stage 4: Build system instruction ─────
       const systemInstruction = Modes.buildSystemInstruction(mode, lang, clauseContext);
 
-      // ── Build current user parts ───────────────
+      // Build user parts
       const userParts = [];
-
-      // Attach files as inline_data
       for (const file of fileDataArray) {
-        userParts.push({
-          inline_data: {
-            mime_type: file.mimeType,
-            data:      file.data,
-          },
-        });
+        userParts.push({ inline_data: { mime_type: file.mimeType, data: file.data } });
       }
+      if (userMessage.trim()) userParts.push({ text: userMessage });
 
-      // Append user text
-      if (userMessage.trim()) {
-        userParts.push({ text: userMessage });
-      }
-
-      // ── Assemble full contents array ───────────
-      // Full history + current turn
-      const contents = [
-        ...history,
-        { role: 'user', parts: userParts },
-      ];
-
-      // ── Build request payload ──────────────────
       const payload = {
-        contents,
-        system_instruction: {
-          parts: [{ text: systemInstruction }],
-        },
-        generationConfig: GENERATION_CONFIG,
-        safetySettings:   SAFETY_SETTINGS,
+        contents: [...history, { role: 'user', parts: userParts }],
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        generationConfig:   GENERATION_CONFIG,
+        safetySettings:     SAFETY_SETTINGS,
       };
 
-      // ── Stage 5: Call Gemini streaming API ─────
-      const url = `${ENDPOINT}?key=${encodeURIComponent(apiKey)}&alt=sse`;
-      const response = await fetch(url, {
+      const response = await fetch(PROXY, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        let errMsg = `API error ${response.status}`;
-        try {
-          const errBody = await response.json();
-          errMsg = errBody?.error?.message || errMsg;
-        } catch {}
-        throw new Error(errMsg);
+        let msg = `Server error ${response.status}`;
+        try { const e = await response.json(); msg = e?.error?.message || msg; } catch {}
+        throw new Error(msg);
       }
 
-      // ── Consume SSE stream ─────────────────────
-      const reader = response.body.getReader();
+      // Consume SSE stream from proxy
+      const reader  = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
-      let buffer = '';
+      let buffer   = '';
       let fullText = '';
 
       while (true) {
@@ -116,15 +86,13 @@ const GeminiAPI = (() => {
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep incomplete line
+        buffer = lines.pop();
 
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed.startsWith('data:')) continue;
-
           const jsonStr = trimmed.slice(5).trim();
           if (jsonStr === '[DONE]') continue;
-
           try {
             const chunk = JSON.parse(jsonStr);
             const delta = chunk?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -132,38 +100,22 @@ const GeminiAPI = (() => {
               fullText += delta;
               onChunk?.(delta, fullText);
             }
-
-            // Check for finish reason
-            const finishReason = chunk?.candidates?.[0]?.finishReason;
-            if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
-              console.warn('Gemini finish reason:', finishReason);
-            }
-          } catch (parseErr) {
-            // Skip malformed SSE chunks
-          }
+          } catch { /* skip malformed chunk */ }
         }
       }
 
       onDone?.(fullText);
-      return fullText;
 
     } catch (err) {
       onError?.(err);
-      throw err;
     }
   }
 
-  /**
-   * Estimate token count (rough — 1 token ≈ 4 chars for English)
-   */
   function estimateTokens(history, currentMessage, clauseContext) {
-    let total = 0;
-    history.forEach(turn => {
-      turn.parts?.forEach(p => { total += (p.text?.length || 0) / 4; });
-    });
+    let total = 500;
+    history.forEach(t => t.parts?.forEach(p => { total += (p.text?.length || 0) / 4; }));
     total += (currentMessage?.length || 0) / 4;
-    total += (clauseContext?.length || 0) / 4;
-    total += 500; // system instruction overhead
+    total += (clauseContext?.length  || 0) / 4;
     return Math.round(total);
   }
 

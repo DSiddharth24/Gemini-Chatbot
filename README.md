@@ -54,32 +54,43 @@ LegalEase/
 
 ---
 
-## Setup & Usage
+## Setup & Deployment
 
-### 1. Get a Gemini API Key
-Go to [Google AI Studio](https://aistudio.google.com/app/apikey) and create a free API key.
-
-### 2. Run the App
-No build step required. Open `index.html` directly in any modern browser, or serve it:
+### 1. Create your `.env`
 
 ```bash
-# Python (simplest)
-python -m http.server 8000
-
-# Node.js
-npx serve .
+cp .env.example .env
 ```
 
-Then open `http://localhost:8000`.
+Edit `.env` and set your key:
+```
+GEMINI_API_KEY=AIzaSy_your_actual_key
+```
 
-### 3. Enter Your API Key
-Click the 🔑 button in the top-right corner, paste your key, and click **Save**.
+The key stays on the server — it is never sent to the browser.
 
-### 4. Start Using
-- **Chat** — type any legal question and press Enter
-- **Upload document** — click 📎 to attach a PDF, image, or audio file
-- **Change mode** — click any mode button in the top bar (Risk Analysis, Simplify, etc.)
-- **Change language** — click EN / ಕನ್ನಡ / हिंदी in the top-right
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Run locally
+
+```bash
+python server.py
+# open http://localhost:5000
+```
+
+### 4. Deploy
+
+**Render / Railway / Fly.io:** set `GEMINI_API_KEY` as an environment variable in the dashboard, push the repo, and point the start command to `python server.py`.
+
+**Heroku:**
+```bash
+heroku config:set GEMINI_API_KEY=AIzaSy_your_key
+git push heroku main
+```
 
 ---
 

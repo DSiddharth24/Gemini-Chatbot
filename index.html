@@ -44,12 +44,6 @@
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
           </svg>
         </button>
-        <button class="hdr-btn key-btn" id="keyBtn" title="Set API key" aria-label="Set API key">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>
-          </svg>
-          <span id="keyStatus">Set key</span>
-        </button>
         <button class="hdr-btn" id="clearBtn" title="Clear session" aria-label="Clear session">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
@@ -57,24 +51,6 @@
         </button>
       </div>
     </header>
-
-    <!-- ── API KEY MODAL ── -->
-    <div class="modal-backdrop" id="keyModal" hidden>
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-        <div class="modal-header">
-          <span class="modal-title" id="modalTitle">Gemini API Key</span>
-          <button class="modal-close" id="modalClose" aria-label="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <p class="modal-desc">Your key is held only in memory and cleared when you close the tab. Nothing is stored on disk or sent anywhere except directly to Google's API.</p>
-        <div class="modal-input-row">
-          <input type="password" id="apiKeyInput" placeholder="AIzaSy…" autocomplete="off" spellcheck="false" />
-          <button class="btn-primary" id="saveKeyBtn">Save</button>
-        </div>
-        <p class="modal-hint">Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a></p>
-      </div>
-    </div>
 
     <!-- ── MAIN ── -->
     <main class="main" id="main">

@@ -8,7 +8,6 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
   const state = {
-    apiKey:    '',
     mode:      'general',
     lang:      'en',
     history:   [],      // Gemini [{role, parts}] — in memory only
@@ -28,15 +27,7 @@
     langBtns:      document.querySelectorAll('.lang-btn'),
     themeBtn:      $('themeBtn'),
     themeIcon:     $('themeIcon'),
-    keyBtn:        $('keyBtn'),
-    keyStatus:     $('keyStatus'),
     clearBtn:      $('clearBtn'),
-
-    // Modal
-    keyModal:      $('keyModal'),
-    modalClose:    $('modalClose'),
-    apiKeyInput:   $('apiKeyInput'),
-    saveKeyBtn:    $('saveKeyBtn'),
 
     // Main
     main:          $('main'),
@@ -75,27 +66,6 @@
     dom.themeIcon.innerHTML = t === 'dark'
       ? '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
       : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
-  }
-
-  // ── API Key ────────────────────────────────────────────────────────────────
-  function openKeyModal() {
-    dom.keyModal.hidden = false;
-    dom.apiKeyInput.focus();
-  }
-
-  function closeKeyModal() {
-    dom.keyModal.hidden = true;
-    dom.apiKeyInput.value = '';
-  }
-
-  function saveKey() {
-    const key = dom.apiKeyInput.value.trim();
-    if (!key) return;
-    state.apiKey = key;
-    Storage.saveApiKey(key);
-    dom.keyStatus.textContent = 'Key set';
-    dom.keyBtn.classList.add('has-key');
-    closeKeyModal();
   }
 
   // ── Mode ───────────────────────────────────────────────────────────────────
@@ -226,8 +196,6 @@
 
     if (!text && files.length === 0) return;
 
-    if (!state.apiKey) { openKeyModal(); return; }
-
     // Reset input
     state.files = [];
     renderChips();
@@ -260,7 +228,6 @@
 
     try {
       await GeminiAPI.streamMessage({
-        apiKey:        state.apiKey,
         userMessage:   text,
         fileDataArray: files,
         history:       state.history,
@@ -463,13 +430,6 @@
       applyTheme(state.theme === 'dark' ? 'light' : 'dark');
     });
 
-    // API key modal
-    dom.keyBtn.addEventListener('click', openKeyModal);
-    dom.modalClose.addEventListener('click', closeKeyModal);
-    dom.keyModal.addEventListener('click', e => { if (e.target === dom.keyModal) closeKeyModal(); });
-    dom.saveKeyBtn.addEventListener('click', saveKey);
-    dom.apiKeyInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveKey(); });
-
     // Clear
     dom.clearBtn.addEventListener('click', clearSession);
 
@@ -515,9 +475,9 @@
       if (chip) send(chip.dataset.query);
     });
 
-    // Escape closes modal
+    // Escape key — no-op (no modal)
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && !dom.keyModal.hidden) closeKeyModal();
+      if (e.key === 'Escape') { /* reserved */ }
     });
   }
 
