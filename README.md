@@ -1,4 +1,4 @@
-# Gemini Chatbot
+# LegalEase
 
 https://gemini-chatbot-4mmq.onrender.com/
 
