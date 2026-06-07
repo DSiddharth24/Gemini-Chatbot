@@ -14,7 +14,7 @@ load_dotenv()
 
 API_KEY     = os.environ["GEMINI_API_KEY"]
 TEMPERATURE = float(os.environ.get("GEMINI_TEMPERATURE", "0.2"))
-MODEL    = "gemini-2.0-flash"
+MODEL    = "gemini-2.5-flash"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:streamGenerateContent"
 
 app = Flask(__name__, static_folder=".", static_url_path="")
